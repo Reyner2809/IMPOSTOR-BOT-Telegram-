@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import bot; print\\(''Bot OK''\\)\")",
+      "Bash(python -c \"import bot; print\\(''OK''\\)\")",
+      "Bash(python -m py_compile models.py)",
+      "Bash(python -m py_compile game_manager.py)",
+      "Bash(python -m py_compile handlers/vote_handler.py)",
+      "Bash(python -m py_compile handlers/word_phase_handler.py)",
+      "Bash(python -m py_compile handlers/start_game.py)",
+      "Bash(python -m py_compile config.py)"
+    ]
+  }
+}
