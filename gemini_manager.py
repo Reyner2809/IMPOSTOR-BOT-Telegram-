@@ -1,90 +1,86 @@
 """Integración con Gemini AI para generación de palabras y pistas."""
 
-import json
 import logging
 import asyncio
-import re
 from collections import deque
 from datetime import datetime, date
-from pathlib import Path
 
 from google import genai
 from google.genai import types
 
-from config import GEMINI_API_KEY
+from config import GEMINI_API_KEY, UPSTASH_REDIS_URL
 from word_manager import word_manager
 
 logger = logging.getLogger(__name__)
 
-USED_WORDS_PATH = Path("data/used_words.json")
 MAX_RPM = 15
 MAX_RPD = 500
 GEMINI_MODEL = "gemini-flash-lite-latest"
+REDIS_WORDS_KEY = "impostor_bot:used_words"
 
 
 class GeminiManager:
     def __init__(self):
         self._configured = False
         self._client = None
-        self._request_times: deque = deque()  # timestamps últimos 60s (para RPM)
+        self._redis = None
+        self._used_words_memory: set[str] = set()  # fallback si Redis no disponible
+        self._request_times: deque = deque()
         self._daily_count = 0
         self._daily_date = date.today()
-        self._used_words: set[str] = set()
         self._lock = asyncio.Lock()
 
-        self._load_used_words()
-
+        # Configurar Gemini
         if GEMINI_API_KEY and GEMINI_API_KEY != "TU_GEMINI_API_KEY_AQUI":
             try:
                 self._client = genai.Client(api_key=GEMINI_API_KEY)
                 self._configured = True
-                logger.info("Gemini AI configurado correctamente con modelo %s.", GEMINI_MODEL)
+                logger.info("Gemini AI configurado con modelo %s.", GEMINI_MODEL)
             except Exception as e:
                 logger.error("Error configurando Gemini AI: %s", e)
         else:
-            logger.warning(
-                "GEMINI_API_KEY no encontrada. Usando word_manager como fallback."
-            )
+            logger.warning("GEMINI_API_KEY no configurada. Se usarán palabras del sistema.")
 
-    # ── Persistencia de palabras usadas ────────────────────────
+        # Configurar Redis (Upstash)
+        if UPSTASH_REDIS_URL:
+            try:
+                import redis.asyncio as aioredis
+                self._redis = aioredis.from_url(UPSTASH_REDIS_URL, decode_responses=True)
+                logger.info("Redis (Upstash) configurado para tracking de palabras usadas.")
+            except Exception as e:
+                logger.warning("No se pudo inicializar Redis: %s. Tracking en memoria.", e)
+        else:
+            logger.warning("UPSTASH_REDIS_URL no configurada. Tracking de palabras usadas en memoria (se pierde al reiniciar).")
 
-    def _load_used_words(self):
-        if not USED_WORDS_PATH.exists():
-            return
-        try:
-            with open(USED_WORDS_PATH, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            self._used_words = set(data.get("words", []))
-            self._daily_count = data.get("daily_count", 0)
-            daily_date_str = data.get("daily_date", "")
-            if daily_date_str:
-                self._daily_date = date.fromisoformat(daily_date_str)
-            if self._daily_date != date.today():
-                self._daily_date = date.today()
-                self._daily_count = 0
-            logger.info(
-                "Cargadas %d palabras usadas. Consultas hoy: %d/%d.",
-                len(self._used_words), self._daily_count, MAX_RPD
-            )
-        except Exception as e:
-            logger.error("Error cargando used_words.json: %s", e)
+    # ── Redis helpers ───────────────────────────────────────────
 
-    def _save_used_words(self):
-        try:
-            USED_WORDS_PATH.parent.mkdir(parents=True, exist_ok=True)
-            with open(USED_WORDS_PATH, "w", encoding="utf-8") as f:
-                json.dump(
-                    {
-                        "words": list(self._used_words),
-                        "daily_count": self._daily_count,
-                        "daily_date": self._daily_date.isoformat(),
-                    },
-                    f,
-                    ensure_ascii=False,
-                    indent=2,
-                )
-        except Exception as e:
-            logger.error("Error guardando used_words.json: %s", e)
+    async def _is_word_used(self, word: str) -> bool:
+        if self._redis:
+            try:
+                return bool(await self._redis.sismember(REDIS_WORDS_KEY, word))
+            except Exception as e:
+                logger.warning("Redis error (sismember): %s. Consultando memoria.", e)
+        return word in self._used_words_memory
+
+    async def _mark_word_used(self, word: str):
+        if self._redis:
+            try:
+                await self._redis.sadd(REDIS_WORDS_KEY, word)
+                return
+            except Exception as e:
+                logger.warning("Redis error (sadd): %s. Guardando en memoria.", e)
+        self._used_words_memory.add(word)
+
+    async def _get_used_words_for_prompt(self) -> str:
+        if self._redis:
+            try:
+                members = await self._redis.smembers(REDIS_WORDS_KEY)
+                recent = list(members)[-100:]
+                return ", ".join(recent) if recent else "ninguna"
+            except Exception as e:
+                logger.warning("Redis error (smembers): %s.", e)
+        recent = list(self._used_words_memory)[-100:]
+        return ", ".join(recent) if recent else "ninguna"
 
     # ── Rate limiting ───────────────────────────────────────────
 
@@ -95,11 +91,10 @@ class GeminiManager:
             self._daily_count = 0
 
     def _can_make_request(self) -> bool:
-        """Verifica límites: 15 RPM y 500 RPD."""
         self._check_daily_reset()
 
         if self._daily_count >= MAX_RPD:
-            logger.warning("Límite diario alcanzado (%d/%d). Usando fallback.", self._daily_count, MAX_RPD)
+            logger.warning("Límite diario alcanzado (%d/%d).", self._daily_count, MAX_RPD)
             return False
 
         now = datetime.now().timestamp()
@@ -107,47 +102,59 @@ class GeminiManager:
             self._request_times.popleft()
 
         if len(self._request_times) >= MAX_RPM:
-            logger.warning("Límite por minuto alcanzado (%d RPM). Usando fallback.", MAX_RPM)
+            logger.warning("Límite por minuto alcanzado (%d RPM).", MAX_RPM)
             return False
 
         return True
 
     def _record_request(self):
-        now = datetime.now().timestamp()
-        self._request_times.append(now)
+        self._request_times.append(datetime.now().timestamp())
         self._daily_count += 1
-        self._save_used_words()
 
     # ── API pública ─────────────────────────────────────────────
 
     async def get_word_and_hint(self, category: str = "todas") -> tuple[str, str]:
-        """
-        Obtiene una palabra secreta y pista del impostor usando Gemini AI.
-        Si Gemini no está configurado o falla, usa word_manager como fallback.
-        """
+        """Obtiene palabra y pista. Intenta Gemini primero, fallback al sistema."""
         if not self._configured:
-            return word_manager.get_random_word(category)
+            word, hint = word_manager.get_random_word(category)
+            logger.info("[PALABRAS DEL SISTEMA] Gemini no configurado. palabra='%s', pista='%s'.", word, hint)
+            return word, hint
 
         async with self._lock:
             if not self._can_make_request():
-                return word_manager.get_random_word(category)
+                word, hint = word_manager.get_random_word(category)
+                logger.warning(
+                    "[PALABRAS DEL SISTEMA] Límite de API alcanzado (%d/%d). palabra='%s', pista='%s'.",
+                    self._daily_count, MAX_RPD, word, hint
+                )
+                return word, hint
 
             try:
                 result = await self._call_gemini(category)
                 if result:
                     self._record_request()
                     logger.info(
-                        "Gemini generó: palabra='%s', pista='%s'. Consultas hoy: %d/%d.",
+                        "[PALABRAS DE IA] Gemini generó: palabra='%s', pista='%s'. Consultas hoy: %d/%d.",
                         result[0], result[1], self._daily_count, MAX_RPD
                     )
                     return result
-            except Exception as e:
-                logger.error("Error en llamada a Gemini: %s. Usando fallback.", e)
+                else:
+                    word, hint = word_manager.get_random_word(category)
+                    logger.warning(
+                        "[PALABRAS DEL SISTEMA] Gemini no devolvió resultado válido. palabra='%s', pista='%s'.",
+                        word, hint
+                    )
+                    return word, hint
 
-        return word_manager.get_random_word(category)
+            except Exception as e:
+                word, hint = word_manager.get_random_word(category)
+                logger.error(
+                    "[PALABRAS DEL SISTEMA] API de Gemini falló: %s — el juego continúa. palabra='%s', pista='%s'.",
+                    e, word, hint
+                )
+                return word, hint
 
     def get_stats(self) -> dict:
-        """Retorna estadísticas de uso de la API."""
         self._check_daily_reset()
         now = datetime.now().timestamp()
         recent = sum(1 for t in self._request_times if now - t <= 60)
@@ -156,19 +163,14 @@ class GeminiManager:
             "daily_limit": MAX_RPD,
             "rpm_count": recent,
             "rpm_limit": MAX_RPM,
-            "used_words_count": len(self._used_words),
             "configured": self._configured,
+            "redis_configured": self._redis is not None,
         }
 
     # ── Llamada a Gemini ────────────────────────────────────────
 
     async def _call_gemini(self, category: str) -> tuple[str, str] | None:
-        """Llama a la API de Gemini y parsea la respuesta."""
-        used_list = (
-            ", ".join(list(self._used_words)[-100:])
-            if self._used_words
-            else "ninguna"
-        )
+        used_str = await self._get_used_words_for_prompt()
 
         category_hint = ""
         if category != "todas":
@@ -192,7 +194,7 @@ Genera UNA palabra secreta y UNA pista vaga para el impostor con estas reglas:
 - Pista del impostor: 1 a 3 palabras MUY VAGAS que insinúan la palabra sin revelarla.
 - La pista NO debe contener la palabra ni sinónimos directos.
 - Dificultad media. Apropiada para todo público.{category_hint}
-- EVITA estas palabras ya usadas: {used_list}
+- EVITA estas palabras ya usadas: {used_str}
 
 Responde EXACTAMENTE en este formato (dos líneas, sin nada más):
 PALABRA: <la palabra>
@@ -214,7 +216,6 @@ PISTA: <la pista>"""
         text = response.text.strip()
         logger.debug("Respuesta cruda de Gemini: %r", text)
 
-        # Parsear formato "PALABRA: x\nPISTA: y"
         palabra = ""
         pista = ""
         for line in text.splitlines():
@@ -228,15 +229,11 @@ PISTA: <la pista>"""
             logger.error("Respuesta de Gemini no tiene formato esperado: %r", text)
             return None
 
-        if not palabra or not pista:
-            logger.error("Gemini devolvió palabra o pista vacía: %s", data)
-            return None
-
-        if palabra in self._used_words:
+        if await self._is_word_used(palabra):
             logger.warning("Gemini repitió palabra '%s'. Usando fallback.", palabra)
             return None
 
-        self._used_words.add(palabra)
+        await self._mark_word_used(palabra)
         return palabra, pista
 
 

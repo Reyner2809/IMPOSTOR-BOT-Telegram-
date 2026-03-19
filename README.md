@@ -89,17 +89,38 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 4. Configurar el token del bot
+### 4. Configurar variables de entorno
 
 Crea un archivo `.env` en la raiz del proyecto:
 
 ```
 BOT_TOKEN=TU_TOKEN_AQUI
 GEMINI_API_KEY=TU_API_KEY_AQUI
+UPSTASH_REDIS_URL=rediss://default:TU_PASSWORD@tu-host.upstash.io:6379
 ```
 
-- `BOT_TOKEN`: token que te dio [@BotFather](https://t.me/BotFather) al crear tu bot.
-- `GEMINI_API_KEY`: clave de la API de Gemini. Obtenla en [aistudio.google.com/apikey](https://aistudio.google.com/apikey) creando una key en un **proyecto nuevo**. Si no la configuras, el bot usara las palabras del archivo `data/words.json` como fallback automaticamente.
+#### BOT_TOKEN (obligatorio)
+Token que te dio [@BotFather](https://t.me/BotFather) al crear tu bot.
+
+#### GEMINI_API_KEY (opcional)
+Permite que la IA genere las palabras y pistas automaticamente en cada partida.
+
+1. Ve a [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
+2. Haz clic en **"Create API key"** → **"Create API key in new project"**
+3. Copia la key generada
+
+Si no la configuras, el bot usa las palabras del archivo `data/words.json` como fallback sin interrumpir el juego.
+
+> En los logs veras `[PALABRAS DE IA]` cuando Gemini funciona correctamente, y `[PALABRAS DEL SISTEMA]` cuando usa el fallback (con el motivo del fallo).
+
+#### UPSTASH_REDIS_URL (opcional, recomendado)
+Permite que las palabras generadas por la IA no se repitan entre partidas, persistiendo el historial aunque el bot se reinicie.
+
+1. Crea una cuenta gratuita en [console.upstash.com](https://console.upstash.com)
+2. Crea una base de datos → **Redis** → tipo **Regional**
+3. En la seccion **"Connect"** copia la **Redis URL** (empieza con `rediss://`)
+
+Si no lo configuras, el historial de palabras se guarda en memoria y se pierde al reiniciar el bot.
 
 ### 5. Ejecutar
 
@@ -237,3 +258,4 @@ Puedes agregar mas palabras editando el archivo JSON. Cada entrada tiene el form
 - **python-telegram-bot 21.6** con soporte de JobQueue (APScheduler)
 - **aiosqlite** para persistencia asincrona en SQLite
 - **google-genai** para generacion de palabras y pistas con Gemini AI (opcional, con fallback automatico)
+- **redis[asyncio]** para tracking persistente de palabras usadas via Upstash Redis (opcional)
