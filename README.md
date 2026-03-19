@@ -46,6 +46,7 @@ Lobby → Fase de Palabras → Discusion → Votacion → Resultados
 | `/salir` | Salir de la partida (solo en lobby) |
 | `/iniciar` | Inicia la partida (solo el creador) |
 | `/votar` | Muestra los botones de votacion |
+| `/forzar_voto` | Salta la fase de palabras y va directo a votacion (solo el creador) |
 | `/estado` | Ver estado actual de la partida |
 | `/config` | Ver configuracion actual |
 | `/config impostores <N>` | Configurar cantidad de impostores |
@@ -94,9 +95,11 @@ Crea un archivo `.env` en la raiz del proyecto:
 
 ```
 BOT_TOKEN=TU_TOKEN_AQUI
+GEMINI_API_KEY=TU_API_KEY_AQUI
 ```
 
-Reemplaza `TU_TOKEN_AQUI` con el token que te dio [@BotFather](https://t.me/BotFather) al crear tu bot.
+- `BOT_TOKEN`: token que te dio [@BotFather](https://t.me/BotFather) al crear tu bot.
+- `GEMINI_API_KEY`: clave de la API de Gemini. Obtenla en [aistudio.google.com/apikey](https://aistudio.google.com/apikey) creando una key en un **proyecto nuevo**. Si no la configuras, el bot usara las palabras del archivo `data/words.json` como fallback automaticamente.
 
 ### 5. Ejecutar
 
@@ -186,6 +189,7 @@ el_impostor_bot/
 ├── models.py               # Modelos de datos (Game, Player, etc.)
 ├── game_manager.py         # Logica principal del juego
 ├── word_manager.py         # Gestion de palabras y categorias
+├── gemini_manager.py       # Integracion con Gemini AI (genera palabras y pistas)
 ├── database.py             # Persistencia en SQLite
 ├── requirements.txt        # Dependencias
 ├── .env                    # Token del bot (no incluido en el repo)
@@ -232,3 +236,4 @@ Puedes agregar mas palabras editando el archivo JSON. Cada entrada tiene el form
 - **Python 3.10+**
 - **python-telegram-bot 21.6** con soporte de JobQueue (APScheduler)
 - **aiosqlite** para persistencia asincrona en SQLite
+- **google-genai** para generacion de palabras y pistas con Gemini AI (opcional, con fallback automatico)

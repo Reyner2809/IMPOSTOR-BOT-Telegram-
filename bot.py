@@ -42,7 +42,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "/unirse - Unirse a una partida\n"
             "/salir - Salir de una partida\n"
             "/iniciar - Iniciar la partida\n"
-            "/votar - Forzar votación\n"
+            "/votar - Ver botones de votación\n"
+            "/forzar\\_voto - Saltar fase de palabras (solo creador)\n"
             "/estado - Ver estado de la partida\n"
             "/config - Ver configuración\n"
             "/cancelar - Cancelar la partida\n"
@@ -72,7 +73,8 @@ async def post_init(application):
         BotCommand("unirse", "Unirse a la partida"),
         BotCommand("salir", "Salir de la partida"),
         BotCommand("iniciar", "Iniciar la partida"),
-        BotCommand("votar", "Forzar votación"),
+        BotCommand("votar", "Ver botones de votación"),
+        BotCommand("forzar_voto", "Saltar fase de palabras (solo creador)"),
         BotCommand("estado", "Ver estado de la partida"),
         BotCommand("config", "Ver configuración"),
         BotCommand("cancelar", "Cancelar la partida"),

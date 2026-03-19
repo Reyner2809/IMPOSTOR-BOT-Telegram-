@@ -297,8 +297,42 @@ def cancel_all_timers(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
             job.schedule_removal()
 
 
+async def forzar_voto(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Comando /forzar_voto - el creador salta la fase de palabras y fuerza la votación."""
+    chat = update.effective_chat
+    user = update.effective_user
+
+    if chat.type == "private":
+        await update.message.reply_text("⚠️ Usa este comando en el grupo de la partida.")
+        return
+
+    game = game_manager.get_game(chat.id)
+    if not game:
+        await update.message.reply_text("⚠️ No hay una partida activa en este grupo.")
+        return
+
+    if game.state == GameState.PLAYING:
+        await update.message.reply_text("⚠️ Ya estás en fase de votación.")
+        return
+
+    try:
+        game = await game_manager.force_to_voting(chat.id, user.id)
+    except ValueError as e:
+        await update.message.reply_text(f"⚠️ {e}")
+        return
+
+    await update.message.reply_text("⏭️ <b>Fase de palabras saltada.</b> Pasando a votación...", parse_mode="HTML")
+
+    from handlers.word_phase_handler import _cleanup_turn_messages
+    await _cleanup_turn_messages(context.bot, chat.id, game)
+
+    from handlers.start_game import start_round_in_group
+    await start_round_in_group(context.bot, chat.id, game, context)
+
+
 def get_handlers():
     return [
         CommandHandler("votar", votar),
+        CommandHandler("forzar_voto", forzar_voto),
         CallbackQueryHandler(vote_callback, pattern=r"^vote_"),
     ]

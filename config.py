@@ -16,6 +16,9 @@ if _env_path.exists():
 # Token del bot (obtener de @BotFather)
 BOT_TOKEN = os.getenv("BOT_TOKEN", "TU_TOKEN_AQUI")
 
+# API Key de Gemini (obtener en https://aistudio.google.com/apikey)
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "TU_GEMINI_API_KEY_AQUI")
+
 # Base de datos
 DB_PATH = os.getenv("DB_PATH", "data/impostor.db")
 

@@ -4,6 +4,7 @@ import random
 import uuid
 from models import Game, GameConfig, GameState, Player, PlayerRole
 from word_manager import word_manager
+from gemini_manager import gemini_manager
 from database import save_game, save_vote, save_stats, delete_game
 
 
@@ -122,21 +123,23 @@ class GameManager:
                 player.role = PlayerRole.NORMAL
             player.is_alive = True
 
+        # Obtener palabra y pista (Gemini AI, con fallback a word_manager)
+        word, hint = await gemini_manager.get_word_and_hint(game.config.category)
+
         # Iniciar primera ronda
-        self._start_new_round(game, first_round=True)
+        self._start_new_round(game, first_round=True, word=word, hint=hint)
         game.state = GameState.WORD_PHASE
         await save_game(game)
         return game
 
     # ── Rondas ─────────────────────────────────────────────────
 
-    def _start_new_round(self, game: Game, first_round: bool = False):
+    def _start_new_round(self, game: Game, first_round: bool = False, word: str = "", hint: str = ""):
         """Prepara una nueva ronda: resetea votos. Solo asigna palabra en la primera ronda."""
         game.round_number += 1
 
         if first_round:
-            # Asignar palabra solo una vez al inicio de la partida
-            word, hint = word_manager.get_random_word(game.config.category)
+            # Asignar palabra (ya obtenida de Gemini AI o fallback)
             game.secret_word = word
             game.impostor_hint = hint
 
@@ -329,6 +332,17 @@ class GameManager:
             await save_game(game)
 
         return result
+
+    # ── Forzar votación ───────────────────────────────────────
+
+    async def force_to_voting(self, chat_id: int, user_id: int) -> Game:
+        """El creador fuerza el paso a votación saltando los turnos pendientes."""
+        game = self._require_game(chat_id, [GameState.WORD_PHASE])
+        self._require_creator(game, user_id)
+        game.current_turn_index = len(game.turn_order)
+        game.state = GameState.PLAYING
+        await save_game(game)
+        return game
 
     # ── Finalizar / Cancelar ──────────────────────────────────
 

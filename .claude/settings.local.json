@@ -8,7 +8,8 @@
       "Bash(python -m py_compile handlers/vote_handler.py)",
       "Bash(python -m py_compile handlers/word_phase_handler.py)",
       "Bash(python -m py_compile handlers/start_game.py)",
-      "Bash(python -m py_compile config.py)"
+      "Bash(python -m py_compile config.py)",
+      "Bash(grep -E \"\\\\.\\(py|txt|json|md\\)$\")"
     ]
   }
 }
