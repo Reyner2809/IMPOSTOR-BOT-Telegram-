@@ -96,7 +96,8 @@ Crea un archivo `.env` en la raiz del proyecto:
 ```
 BOT_TOKEN=TU_TOKEN_AQUI
 GEMINI_API_KEY=TU_API_KEY_AQUI
-UPSTASH_REDIS_URL=rediss://default:TU_PASSWORD@tu-host.upstash.io:6379
+UPSTASH_REDIS_REST_URL=https://tu-nombre.upstash.io
+UPSTASH_REDIS_REST_TOKEN=tu_token_aqui
 ```
 
 #### BOT_TOKEN (obligatorio)
@@ -113,12 +114,17 @@ Si no la configuras, el bot usa las palabras del archivo `data/words.json` como 
 
 > En los logs veras `[PALABRAS DE IA]` cuando Gemini funciona correctamente, y `[PALABRAS DEL SISTEMA]` cuando usa el fallback (con el motivo del fallo).
 
-#### UPSTASH_REDIS_URL (opcional, recomendado)
-Permite que las palabras generadas por la IA no se repitan entre partidas, persistiendo el historial aunque el bot se reinicie.
+#### UPSTASH_REDIS_REST_URL y UPSTASH_REDIS_REST_TOKEN (opcional, recomendado)
+Permite que las palabras generadas por la IA no se repitan entre partidas, persistiendo el historial aunque el bot se reinicie. Usa HTTPS (puerto 443) por lo que funciona en cualquier servidor sin importar restricciones de firewall.
 
 1. Crea una cuenta gratuita en [console.upstash.com](https://console.upstash.com)
 2. Crea una base de datos → **Redis** → tipo **Regional**
-3. En la seccion **"Connect"** copia la **Redis URL** (empieza con `rediss://`)
+3. En la seccion **"REST API"** copia la URL y el token
+
+```
+UPSTASH_REDIS_REST_URL=https://tu-nombre.upstash.io
+UPSTASH_REDIS_REST_TOKEN=tu_token_aqui
+```
 
 Si no lo configuras, el historial de palabras se guarda en memoria y se pierde al reiniciar el bot.
 
@@ -258,4 +264,4 @@ Puedes agregar mas palabras editando el archivo JSON. Cada entrada tiene el form
 - **python-telegram-bot 21.6** con soporte de JobQueue (APScheduler)
 - **aiosqlite** para persistencia asincrona en SQLite
 - **google-genai** para generacion de palabras y pistas con Gemini AI (opcional, con fallback automatico)
-- **redis[asyncio]** para tracking persistente de palabras usadas via Upstash Redis (opcional)
+- **upstash-redis** para tracking persistente de palabras usadas via Upstash REST API (opcional)

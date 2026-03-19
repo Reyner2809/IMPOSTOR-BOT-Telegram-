@@ -8,7 +8,7 @@ from datetime import datetime, date
 from google import genai
 from google.genai import types
 
-from config import GEMINI_API_KEY, UPSTASH_REDIS_URL
+from config import GEMINI_API_KEY, UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN
 from word_manager import word_manager
 
 logger = logging.getLogger(__name__)
@@ -41,16 +41,16 @@ class GeminiManager:
         else:
             logger.warning("GEMINI_API_KEY no configurada. Se usarán palabras del sistema.")
 
-        # Configurar Redis (Upstash)
-        if UPSTASH_REDIS_URL:
+        # Configurar Redis (Upstash REST API — usa HTTPS, no bloqueable por firewall)
+        if UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN:
             try:
-                import redis.asyncio as aioredis
-                self._redis = aioredis.from_url(UPSTASH_REDIS_URL, decode_responses=True)
-                logger.info("Redis (Upstash) configurado para tracking de palabras usadas.")
+                from upstash_redis.asyncio import Redis
+                self._redis = Redis(url=UPSTASH_REDIS_REST_URL, token=UPSTASH_REDIS_REST_TOKEN)
+                logger.info("Redis (Upstash REST) configurado para tracking de palabras usadas.")
             except Exception as e:
                 logger.warning("No se pudo inicializar Redis: %s. Tracking en memoria.", e)
         else:
-            logger.warning("UPSTASH_REDIS_URL no configurada. Tracking de palabras usadas en memoria (se pierde al reiniciar).")
+            logger.warning("UPSTASH_REDIS_REST_URL/TOKEN no configurados. Tracking de palabras en memoria (se pierde al reiniciar).")
 
     # ── Redis helpers ───────────────────────────────────────────
 

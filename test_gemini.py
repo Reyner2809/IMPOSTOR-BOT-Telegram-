@@ -18,7 +18,7 @@ async def main():
     print(f"\nEstado inicial:")
     print(f"  Configurado : {stats['configured']}")
     print(f"  Uso hoy     : {stats['daily_count']}/{stats['daily_limit']}")
-    print(f"  Palabras usadas históricas: {stats['used_words_count']}")
+    print(f"  Redis configurado : {stats['redis_configured']}")
 
     if not stats["configured"]:
         print("\n❌ Gemini NO está configurado. Revisa GEMINI_API_KEY en .env")

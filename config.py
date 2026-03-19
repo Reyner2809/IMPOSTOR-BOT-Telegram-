@@ -19,8 +19,9 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "TU_TOKEN_AQUI")
 # API Key de Gemini (obtener en https://aistudio.google.com/apikey)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "TU_GEMINI_API_KEY_AQUI")
 
-# URL de Upstash Redis (obtener en https://console.upstash.com)
-UPSTASH_REDIS_URL = os.getenv("UPSTASH_REDIS_URL", "")
+# Upstash Redis REST API (obtener en https://console.upstash.com → REST API)
+UPSTASH_REDIS_REST_URL = os.getenv("UPSTASH_REDIS_REST_URL", "")
+UPSTASH_REDIS_REST_TOKEN = os.getenv("UPSTASH_REDIS_REST_TOKEN", "")
 
 # Base de datos
 DB_PATH = os.getenv("DB_PATH", "data/impostor.db")
